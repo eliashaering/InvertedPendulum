@@ -1,0 +1,31 @@
+<mujoco model="cartpole">
+  <option gravity="0 0 -9.81" timestep="0.01"/>
+  
+  <worldbody>
+    <light diffuse=".5 .5 .5" pos="0 0 3" dir="0 0 -1"/>
+    <!-- Floor plane -->
+    <geom type="plane" size="2 2 0.1" rgba=".8 .9 .8 1"/>
+    
+    <!-- Visible guide rail for the cart -->
+    <geom type="cylinder" fromto="-1.5 0 1 1.5 0 1" size="0.01" rgba=".3 .3 .3 1" contype="0" conaffinity="0"/>
+    
+    <!-- Movable cart body -->
+    <body name="cart" pos="0 0 1">
+      <!-- Slider joint restricting movement to the X-axis -->
+      <joint name="slider" type="slide" axis="1 0 0" limited="true" range="-5 5" damping="0.5"/>
+      <geom type="box" size="0.15 0.1 0.05" mass="1.0" rgba=".2 .5 .8 1"/>
+      
+      <!-- Free-swinging pendulum pole -->
+      <body name="pole" pos="0 0 0.05">
+        <!-- Hinge joint rotating around the Y-axis (unactuated) -->
+        <joint name="hinge" type="hinge" axis="0 1 0" damping="0.02"/>
+        <geom type="capsule" fromto="0 0 0 0 0 -0.6" size="0.03" mass="0.1" rgba=".8 .2 .2 1"/>
+      </body>
+    </body>
+  </worldbody>
+  
+  <actuator>
+    <!-- Motor actuator driving the cart slider joint -->
+    <motor name="cart_motor" joint="slider" ctrlrange="-30.0 30.0" ctrllimited="true"/>
+  </actuator>
+</mujoco>

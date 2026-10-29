@@ -1,0 +1,50 @@
+# =========================
+# macOS
+# =========================
+.DS_Store
+.AppleDouble
+.LSOverride
+._*
+.Spotlight-V100
+.Trashes
+.fseventsd
+
+# =========================
+# Python & Machine Learning
+# =========================
+__pycache__/
+*.py[cod]
+*$py.class
+.venv/
+venv/
+env/
+.env
+.pytest_cache/
+.ipynb_checkpoints/
+
+# Trainings-Logs und Checkpoints (fertige .zip/.onnx Modelle werden getrackt)
+logs/
+runs/
+tensorboard_logs/
+*.ckpt
+*.safetensors
+
+# =========================
+# PlatformIO & ESP32
+# =========================
+esp32_firmware/.pio/
+.pio/
+*.o
+*.obj
+*.elf
+*.bin
+*.hex
+*.map
+
+# =========================
+# IDEs & Editoren (VS Code, CLion, etc.)
+# =========================
+.vscode/
+.idea/
+*.swp
+*.swo
