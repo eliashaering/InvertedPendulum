@@ -7,8 +7,7 @@ class InferenceTask {
 public:
     // Launch the inference task pinned exclusively to Core 1 with a dedicated stack
     static void start(SystemQueues* queues) {
-        static const char* TAG_Inference = "Inference";
-        xTaskCreatePinnedToCore(task_loop, "NN", 16384, queues, 5, nullptr, 1);
+        xTaskCreatePinnedToCore(task_loop, "NN", 16384, queues, 5, &inference_task_handle, 1);
     }
 
 private:
@@ -30,7 +29,7 @@ private:
                 xQueueSend(queues->action_queue, &action, portMAX_DELAY);
                 
                 // Log runtime latency and resulting control action
-                ESP_LOGD("INFER", "Latency: %lld us | Action: %.3f", (t_end - t_start), action);
+                ESP_LOGI("INFERENCE", "Latency: %lld us | Action: %.3f", (t_end - t_start), action);
             }
         }
     }

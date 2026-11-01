@@ -2,9 +2,12 @@
 #include <array>
 #include "freertos/FreeRTOS.h"
 #include "freertos/queue.h"
+#include "freertos/task.h"
 
 // Define a fixed-size observation vector matching the MuJoCo CartPole state space dimensions
 using Observation = std::array<float, 4>;
+
+extern TaskHandle_t inference_task_handle;
 
 // Container structure holding thread-safe FreeRTOS queues for inter-core communication
 struct SystemQueues {

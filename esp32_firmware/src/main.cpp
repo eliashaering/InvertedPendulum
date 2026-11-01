@@ -2,6 +2,9 @@
 #include "CommsTask.h"
 #include "InferenceTask.h"
 
+// Handle for inference task ( To get the stack size of inference task)
+TaskHandle_t inference_task_handle = nullptr;
+
 extern "C" void app_main(void) {
     // Define logging tag for the startup sequence
     static const char* TAG_Init = "Initialization";
@@ -15,6 +18,7 @@ extern "C" void app_main(void) {
     // Create FreeRTOS queues with a depth of 1 for immediate real-time synchronization
     queues.obs_queue = xQueueCreate(1, sizeof(Observation));
     queues.action_queue = xQueueCreate(1, sizeof(float));
+
 
     // Launch core-pinned background tasks and inject queue references
     CommsTask::start(&queues);
