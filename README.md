@@ -6,8 +6,9 @@ A Hardware-in-the-Loop (HIL) control system executing a quantized Soft Actor-Cri
 
 * **Deterministic Dual-Core Execution:** Strict task isolation using FreeRTOS core pinning to decouple serial I/O from neural network math.
 * **Custom Quantized Inference:** Standalone C++ inference engine (`int8_t` weights with pre-scaled pointer arithmetic and pruning)—zero external ML library overhead.
+* **Maximum Hardware Utilization:** Enforced 240 MHz CPU clock, 80 MHz flash read speed, and hardware compiler optimization (`-O3`) via custom `sdkconfig.defaults` to meet strict <10 ms control deadlines.
 * **Zero-Blocking RAM Logging:** Custom `esp_log_set_vprintf` hook routing logs to a 4 KB FreeRTOS Stream Buffer in SRAM, eliminating UART bottlenecks and heap fragmentation during control loops.
-* **Microsecond Profiling:** Cycle-accurate latency tracking via `esp_timer` to guarantee strict adherence to simulation timesteps.
+* **Automated HIL Benchmarking:** Python-based profiling suite that extracts real-time telemetry and generates comprehensive, standalone HTML reports tracking latency, UART overhead, and quantization error.
 
 ---
 
@@ -17,8 +18,16 @@ A Hardware-in-the-Loop (HIL) control system executing a quantized Soft Actor-Cri
 
 ### Real-Time Design Choices
 
-* **Core Pinning:** `CommsTask` handles UART interrupts and string parsing on **Core 0**, while `InferenceTask` runs undisturbed on **Core 1**.
+* **Core Pinning:** `CommsTask` handles UART interrupts, string parsing, and telemetry on **Core 0**, while `InferenceTask` runs undisturbed on **Core 1**.
 * **Depth-1 Queues:** `obs_queue` and `action_queue` are initialized with a depth of `1` to enforce tight lockstep synchronization between the physics engine and the microcontroller without stale state buildup.
 * **Static Memory Allocation:** All buffers and queues reside statically in SRAM or on task stacks (`temp_buf[256]`), preventing runtime `malloc`/`free` overhead and heap fragmentation.
+* **Dynamic Telemetry (`GET_META`):** On-demand extraction of FreeRTOS Stack High Water marks, SRAM/Heap availability, and CPU configurations without disrupting the real-time inference loop.
 
+---
+
+## Hardware Benchmark & Profiling
+
+The repository includes a custom Python benchmarking tool (`benchmark.py`) that executes a full Hardware-in-the-Loop test against the ESP32 and generates a dark-themed HTML report.
+
+[View interactive HTML Benchmark Report](https://eliashaering.github.io/InvertedPendulum/simulation/benchmark_report.html)
 
