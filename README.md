@@ -29,5 +29,5 @@ A Hardware-in-the-Loop (HIL) control system executing a quantized Soft Actor-Cri
 
 The repository includes a custom Python benchmarking tool (`benchmark.py`) that executes a full Hardware-in-the-Loop test against the ESP32 and generates a dark-themed HTML report.
 
-[View interactive HTML Benchmark Report](https://eliashaering.github.io/InvertedPendulum/simulation/benchmark_report.html)
+[View interactive HTML Benchmark Report](https://eliashaering.github.io/InvertedPendulum/simulation/benchmark_report.html?v=2)
 
