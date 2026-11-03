@@ -1,6 +1,7 @@
 import os
 import re
 import time
+import struct
 import serial
 import numpy as np
 from stable_baselines3 import SAC
@@ -13,13 +14,20 @@ LOG_FLUSH_INTERVAL = 40
 DEADLINE_MS = 10.0
 TOTAL_MACS = (4 * 256) + (256 * 256) + (256 * 1)
 
+# UART Protocol Constants
+UART_Header_OBS = 0x00
+UART_Header_ACT = 0x01
+UART_Header_LOG = 0x02
+UART_Header_META = 0x03
+SCALE = 1000.0
+
 MODEL_PATH = os.path.join(os.path.dirname(__file__), "../mltraining/models/mujoco_cartpole_sac")
 NETWORK_H_PATH = os.path.join(os.path.dirname(__file__), "../esp32_firmware/src/network.h")
 HTML_TEMPLATE_PATH = os.path.join(os.path.dirname(__file__), "benchmark_template.html")
 HTML_OUTPUT_PATH = os.path.join(os.path.dirname(__file__), "benchmark_report.html")
 
+# Only keep regex for logs, as logs are still text-based
 LATENCY_PATTERN = re.compile(r"Laten(?:cy|z):\s*(\d+)\s*us")
-META_PATTERN = re.compile(r"META:(.+)")
 
 
 def parse_network_sparsity(header_path):
@@ -61,26 +69,44 @@ def compute_offline_quantization_error(test_states, sac_model, header_path):
 
 
 def fetch_esp_latencies(ser):
-    ser.write(b"GET_LOGS\n")
-    time.sleep(0.15)
-    raw = ser.read_all().decode("ascii", errors="ignore")
-    return [int(m) for m in LATENCY_PATTERN.findall(raw)]
+    # Send binary log request (9 bytes)
+    req_logs = struct.pack('<B4h', UART_Header_LOG, 0, 0, 0, 0)
+    ser.write(req_logs)
+    
+    raw_text = ""
+    while True:
+        line = ser.readline().decode("ascii", errors="ignore")
+        if not line or "END_LOGS" in line:
+            break
+        raw_text += line
+        
+    return [int(m) for m in LATENCY_PATTERN.findall(raw_text)]
 
 
 def fetch_esp_metadata(ser):
     ser.reset_input_buffer()
-    ser.write(b"GET_META\n")
-    time.sleep(0.1)
-    raw = ser.read_all().decode("ascii", errors="ignore")
-    match = META_PATTERN.search(raw)
-    if not match:
-        return {}
-    meta_dict = {}
-    for entry in match.group(1).strip().split(","):
-        if "=" in entry:
-            key, val = entry.split("=", 1)
-            meta_dict[key.strip()] = int(val.strip())
-    return meta_dict
+    # Send binary meta request (9 bytes)
+    req_meta = struct.pack('<B4h', UART_Header_META, 0, 0, 0, 0)
+    ser.write(req_meta)
+    
+    # Wait and read exact size of MetaPacket struct (25 bytes: 1 uint8 + 6 uint32)
+    raw = ser.read(25)
+    
+    if len(raw) == 25:
+        header, flash, sram_t, sram_f, min_heap, stk0, stk1 = struct.unpack('<B6I', raw)
+        
+        if header == UART_Header_META:
+            return {
+                "CPU": 240, # Hardcoded fallback (removed from C++ struct)
+                "OPT": 1,   # Hardcoded fallback (removed from C++ struct)
+                "FLASH_PART": flash,
+                "SRAM_USED": sram_t - sram_f,
+                "HEAP_FREE": sram_f, 
+                "HEAP_MIN": min_heap,
+                "STK0": stk0,
+                "STK1": stk1
+            }
+    return {}
 
 
 def generate_html_report(metrics):
@@ -144,6 +170,7 @@ def run_hardware_benchmark():
     print(f"Starting hardware benchmark ({NUM_SAMPLES} packets @ {BAUD} baud)...")
     ser = serial.Serial(PORT, BAUD, timeout=0.2)
     time.sleep(2.0)
+    ser.reset_input_buffer()
 
     metadata = fetch_esp_metadata(ser)
     _ = fetch_esp_latencies(ser)
@@ -163,38 +190,36 @@ def run_hardware_benchmark():
     tx_bytes = []
     rx_bytes = []
     timeouts = 0
-    sample_raw_resp = None
 
     for i, obs in enumerate(test_states, start=1):
-        payload = f"{obs[0]:.4f},{obs[1]:.4f},{obs[2]:.4f},{obs[3]:.4f}\n".encode("ascii")
+        # Pack observation struct (<B4h)
+        payload = struct.pack('<B4h', 
+            UART_Header_OBS,
+            int(obs[0] * SCALE),
+            int(obs[1] * SCALE),
+            int(obs[2] * SCALE),
+            int(obs[3] * SCALE)
+        )
 
         t0 = time.perf_counter()
         ser.write(payload)
         
-        raw_line = b""
-        while True:
-            line = ser.readline()
-            if not line: 
-                break
-            if line.startswith(b"ACT:"):
-                raw_line = line
-                break
-                
+        # Block and read exact ActPacket size (3 bytes)
+        raw_resp = ser.read(3)
         t1 = time.perf_counter()
 
-        resp = raw_line.decode("ascii", errors="ignore").strip()
-        if resp and sample_raw_resp is None:
-            sample_raw_resp = resp
-
-        if resp.startswith("ACT:"):
-            try:
+        if len(raw_resp) == 3:
+            header, raw_action = struct.unpack('<Bh', raw_resp)
+            if header == UART_Header_ACT:
                 rtts_ms.append((t1 - t0) * 1000.0)
-                tx_bytes.append(len(payload))
-                rx_bytes.append(len(raw_line))
-            except (ValueError, IndexError):
+                tx_bytes.append(9)  # 9 bytes sent
+                rx_bytes.append(3)  # 3 bytes received
+            else:
                 timeouts += 1
+                ser.reset_input_buffer()
         else:
             timeouts += 1
+            ser.reset_input_buffer()
 
         if i % LOG_FLUSH_INTERVAL == 0:
             esp_latencies_us.extend(fetch_esp_latencies(ser))
@@ -203,12 +228,12 @@ def run_hardware_benchmark():
     ser.close()
 
     if not rtts_ms:
-        print(f"\n[ERROR] No valid action responses parsed! First raw ESP32 reply was: {sample_raw_resp!r}")
+        print(f"\n[ERROR] No valid action responses parsed! Check UART connections and headers.")
         return
 
     rtts = np.array(rtts_ms)
     
-    # Umrechnung von us in ms
+    # Convert us to ms
     inf_ms = np.array(esp_latencies_us) / 1000.0 if esp_latencies_us else np.array([0.0])
     mean_inf_ms = np.mean(inf_ms) 
     
@@ -219,18 +244,17 @@ def run_hardware_benchmark():
 
     quant_mae, quant_max_err = compute_offline_quantization_error(test_states, sac_model, NETWORK_H_PATH)
 
-    cpu_mhz = metadata.get("CPU", 160)
-    opt_flag = "Enabled (-O1/-O2/-O3)" if metadata.get("OPT", 0) == 1 else "Disabled (-Og/-O0)"
+    cpu_mhz = metadata.get("CPU", 240)
+    opt_flag = "Enabled (-O1/-O2/-O3)" if metadata.get("OPT", 1) == 1 else "Disabled (-Og/-O0)"
     
-    # Zyklen basierend auf der ms-Zeit zurückrechnen (*1000 für us)
-    cycles_per_mac = (mean_inf_ms * 1000.0 * cpu_mhz) / TOTAL_MACS
+    cycles_per_mac = (mean_inf_ms * 1000.0 * cpu_mhz) / TOTAL_MACS if TOTAL_MACS > 0 else 0
     avg_frame_bytes = (np.mean(tx_bytes) + np.mean(rx_bytes)) if tx_bytes else 0.0
 
     report_metrics = {
         "inf_mean_ms": mean_inf_ms,
-        "inf_std_ms": np.std(inf_ms),
-        "inf_p99_ms": np.percentile(inf_ms, 99),
-        "inf_max_ms": np.max(inf_ms),
+        "inf_std_ms": np.std(inf_ms) if esp_latencies_us else 0.0,
+        "inf_p99_ms": np.percentile(inf_ms, 99) if esp_latencies_us else 0.0,
+        "inf_max_ms": np.max(inf_ms) if esp_latencies_us else 0.0,
         "rtt_mean": np.mean(rtts),
         "rtt_std": np.std(rtts),
         "rtt_p99": np.percentile(rtts, 99),
@@ -254,7 +278,7 @@ def run_hardware_benchmark():
         "sram_used_kb": metadata.get("SRAM_USED", 0) / 1024.0,
         "heap_free_kb": metadata.get("HEAP_FREE", 0) / 1024.0,
         "heap_min_kb": metadata.get("HEAP_MIN", 0) / 1024.0,
-        "stk_c0_bytes": metadata.get("STK0", 0) * 4,
+        "stk_c0_bytes": metadata.get("STK0", 0) * 4, # stack watermark returns words, *4 for bytes
         "stk_c1_bytes": metadata.get("STK1", 0) * 4,
         "opt_flag": opt_flag
     }

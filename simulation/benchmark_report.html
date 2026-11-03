@@ -109,15 +109,15 @@
     <div class="grid">
         <div class="card">
             <div class="card-label">Inference (Core 1)</div>
-            <div class="card-value mono">10.960 ms</div>
+            <div class="card-value mono">10.988 ms</div>
         </div>
         <div class="card">
             <div class="card-label">Mean RTT (Host Link)</div>
-            <div class="card-value mono">19.29 ms</div>
+            <div class="card-value mono">15.28 ms</div>
         </div>
         <div class="card">
             <div class="card-label">Max Frequency</div>
-            <div class="card-value mono">51.8 Hz</div>
+            <div class="card-value mono">65.5 Hz</div>
         </div>
         <div class="card">
             <div class="card-label">Deadline Misses</div>
@@ -133,35 +133,35 @@
         <tbody>
             <tr>
                 <td><strong>ESP32 Inference (Core 1)</strong></td>
-                <td class="mono">10.960 ± 0.006</td>
-                <td class="mono">10.971</td>
-                <td class="mono">10.971</td>
+                <td class="mono">10.988 ± 0.009</td>
+                <td class="mono">10.995</td>
+                <td class="mono">11.027</td>
                 <td>ms</td>
             </tr>
             <tr>
                 <td><strong>HIL Round-Trip Time</strong></td>
-                <td class="mono">19.29 ± 4.64</td>
-                <td class="mono">51.47</td>
-                <td class="mono">52.93</td>
+                <td class="mono">15.28 ± 0.07</td>
+                <td class="mono">15.39</td>
+                <td class="mono">15.52</td>
                 <td>ms</td>
             </tr>
             <tr>
                 <td><strong>UART &amp; Parse Overhead</strong></td>
-                <td class="mono">8.33</td>
+                <td class="mono">4.29</td>
                 <td>-</td>
                 <td>-</td>
                 <td>ms</td>
             </tr>
             <tr>
                 <td><strong>Core 1 Duty Cycle (@ 100 Hz)</strong></td>
-                <td class="mono">109.6%</td>
+                <td class="mono">109.9%</td>
                 <td>-</td>
                 <td>-</td>
                 <td>%</td>
             </tr>
             <tr>
                 <td><strong>Compute Efficiency (@ 240 MHz)</strong></td>
-                <td class="mono">39.4</td>
+                <td class="mono">39.5</td>
                 <td>-</td>
                 <td>-</td>
                 <td>cycles/MAC</td>
@@ -194,7 +194,7 @@
             <tr><td><strong>Weight Sparsity (Zero-Weights)</strong></td><td class="mono">25.9%</td><td>%</td></tr>
             <tr><td><strong>Quantization Error (MAE)</strong></td><td class="mono">0.0016</td><td>N (Action)</td></tr>
             <tr><td><strong>Quantization Error (Max Error)</strong></td><td class="mono">0.0065</td><td>N (Action)</td></tr>
-            <tr><td><strong>Avg UART Frame Size (TX+RX)</strong></td><td class="mono">42.2</td><td>Bytes/step</td></tr>
+            <tr><td><strong>Avg UART Frame Size (TX+RX)</strong></td><td class="mono">12.0</td><td>Bytes/step</td></tr>
         </tbody>
     </table>
 
@@ -207,8 +207,8 @@
             <tr><td><strong>Active App Partition</strong></td><td class="mono">1024.0 KB</td><td>Configured OTA/App partition</td></tr>
             <tr><td><strong>Internal SRAM Used</strong></td><td class="mono">42.1 KB</td><td>Global buffers + static allocations</td></tr>
             <tr><td><strong>Current / Min Free Heap</strong></td><td class="mono">353.2 KB / 266.1 KB</td><td>Lifetime minimum free memory</td></tr>
-            <tr><td><strong>Task Stack Reserve (Comms Core 0)</strong></td><td class="mono">27,392 Bytes</td><td>uxTaskGetStackHighWaterMark</td></tr>
-            <tr><td><strong>Task Stack Reserve (Infer Core 1)</strong></td><td class="mono">50,960 Bytes</td><td>uxTaskGetStackHighWaterMark</td></tr>
+            <tr><td><strong>Task Stack Reserve (Comms Core 0)</strong></td><td class="mono">28,672 Bytes</td><td>uxTaskGetStackHighWaterMark</td></tr>
+            <tr><td><strong>Task Stack Reserve (Infer Core 1)</strong></td><td class="mono">51,024 Bytes</td><td>uxTaskGetStackHighWaterMark</td></tr>
             <tr><td><strong>CPU Frequency / Optimization</strong></td><td class="mono">240 MHz / Enabled (-O1/-O2/-O3)</td><td>Hardware compiler status</td></tr>
         </tbody>
     </table>

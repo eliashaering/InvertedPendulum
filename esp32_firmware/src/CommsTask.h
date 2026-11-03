@@ -18,15 +18,6 @@ public:
     }
 
 private:
-    // Helper to write raw byte arrays directly over UART0
-    static void send_response(const char* str, size_t len = 0) {
-        if (str == nullptr) return;
-        if (len == 0) {
-            len = std::strlen(str);
-        }
-        uart_write_bytes(UART_NUM_0, str, len);
-    }
-
     // Flush in-memory SRAM log buffer to USB host
     static void flush_logs_to_usb() {
         if (log_stream_buffer == nullptr) return;
@@ -35,9 +26,10 @@ private:
         size_t read_bytes;
         
         while ((read_bytes = xStreamBufferReceive(log_stream_buffer, read_buf, sizeof(read_buf), 0)) > 0) {
-            send_response(read_buf, read_bytes);
+            uart_write_bytes(UART_NUM_0, read_buf, read_bytes);
         }
-        send_response("END_LOGS\n");
+        const char* end_str = "END_LOGS\n";
+        uart_write_bytes(UART_NUM_0, end_str, std::strlen(end_str));
     }
 
     // Query active partition size in bytes
@@ -51,62 +43,44 @@ private:
         auto queues = static_cast<SystemQueues*>(arg);
         uart_driver_install(UART_NUM_0, 256, 0, 0, nullptr, 0);
         
-        uint8_t data;
-        char rx_buf[128]; 
-        int idx = 0;
-        
-        while (true) {
-            if (uart_read_bytes(UART_NUM_0, &data, 1, portMAX_DELAY) > 0) {
-                if (data == '\n') {
-                    rx_buf[idx] = '\0'; 
+        RxPacket rx_packet;
+        const float SCALE = 1000.0f;
+        while (true){
+            int size = uart_read_bytes(UART_NUM_0, &rx_packet, sizeof(RxPacket), portMAX_DELAY) ;
+            if (size == sizeof(RxPacket)) {
+                if(rx_packet.header == UART_Header_LOG){
+                    flush_logs_to_usb();
+                } 
+                else if (rx_packet.header == UART_Header_META) { // Send Metadata to Sim 
+                    MetaPacket meta_packet;
+                    meta_packet.header = UART_Header_META;     
+                    meta_packet.flash_part = get_app_partition_size();   
+                    meta_packet.sram_total = heap_caps_get_total_size(MALLOC_CAP_INTERNAL);   
+                    meta_packet.sram_free = heap_caps_get_free_size(MALLOC_CAP_INTERNAL); 
+                    meta_packet.min_heap   = esp_get_minimum_free_heap_size();
+                    meta_packet.stack_c0 = uxTaskGetStackHighWaterMark(NULL);   
+                    meta_packet.stack_c1 = inference_task_handle ? uxTaskGetStackHighWaterMark(inference_task_handle) : 0; 
                     
-                    if (strncmp(rx_buf, "GET_LOGS", 8) == 0) {
-                        flush_logs_to_usb();
-                    } 
-                    else if (strncmp(rx_buf, "GET_META", 8) == 0) {
-                        uint32_t flash_part = get_app_partition_size();
-                        uint32_t sram_total = heap_caps_get_total_size(MALLOC_CAP_INTERNAL);
-                        uint32_t sram_free  = heap_caps_get_free_size(MALLOC_CAP_INTERNAL);
-                        uint32_t min_heap   = esp_get_minimum_free_heap_size();
-                        uint32_t stack_c0   = uxTaskGetStackHighWaterMark(NULL);
-                        uint32_t stack_c1   = inference_task_handle ? uxTaskGetStackHighWaterMark(inference_task_handle) : 0;
-
-                        char meta_buf[256];
-                        int len = std::snprintf(meta_buf, sizeof(meta_buf),
-                            "META:CPU=%d,OPT=%d,FLASH_PART=%lu,SRAM_USED=%lu,HEAP_FREE=%lu,HEAP_MIN=%lu,STK0=%lu,STK1=%lu\n",
-                            CONFIG_ESP_DEFAULT_CPU_FREQ_MHZ,
-                            #ifdef __OPTIMIZE__
-                            1,
-                            #else
-                            0,
-                            #endif
-                            (unsigned long)flash_part,
-                            (unsigned long)(sram_total - sram_free),
-                            (unsigned long)sram_free,
-                            (unsigned long)min_heap,
-                            (unsigned long)stack_c0,
-                            (unsigned long)stack_c1);
-
-                        send_response(meta_buf, len);
-                    }
-                    else {
-                        Observation obs;
-                        if (std::sscanf(rx_buf, "%f,%f,%f,%f", &obs[0], &obs[1], &obs[2], &obs[3]) == 4) {
-                            xQueueSend(queues->obs_queue, &obs, portMAX_DELAY);
-                            
-                            float action;
-                            if (xQueueReceive(queues->action_queue, &action, portMAX_DELAY)) {
-                                char tx_buf[32];
-                                int len = std::snprintf(tx_buf, sizeof(tx_buf), "ACT:%.4f\n", action);
-                                send_response(tx_buf, len);
-                            }
-                        } else {
-                            ESP_LOGE("COMMS", "Parse Error: %s", rx_buf);
-                        }
-                    }
-                    idx = 0; 
-                } else if (data != '\r' && idx < 127) {
-                    rx_buf[idx++] = data;
+                    uart_write_bytes(UART_NUM_0, &meta_packet, sizeof(MetaPacket));
+                }
+                else if (rx_packet.header == UART_Header_OBS){ // Input from Simulation: Observation data
+                    Observation obs = {rx_packet.obs[0] / SCALE, rx_packet.obs[1] / SCALE, rx_packet.obs[2] / SCALE, rx_packet.obs[3] / SCALE};
+            
+                    // Send Observation to Inference 
+                    xQueueSend(queues->obs_queue, &obs, portMAX_DELAY);
+                    
+                    float action;
+                    // Receive Action from Inference and send packet to Sim
+                    if (xQueueReceive(queues->action_queue, &action, portMAX_DELAY)) {
+                        ActPacket act_packet;
+                        act_packet.header = UART_Header_ACT;
+                        act_packet.action = static_cast<int16_t>(action * SCALE);
+                        uart_write_bytes(UART_NUM_0, &act_packet, sizeof(ActPacket));
+                     }
+                }
+                else {
+                // Clear hardware buffer on framing error
+                uart_flush_input(UART_NUM_0);
                 }
             }
         }
