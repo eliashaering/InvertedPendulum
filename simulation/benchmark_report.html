@@ -109,19 +109,19 @@
     <div class="grid">
         <div class="card">
             <div class="card-label">Inference (Core 1)</div>
-            <div class="card-value mono">10.988 ms</div>
+            <div class="card-value mono">2.309 ms</div>
         </div>
         <div class="card">
             <div class="card-label">Mean RTT (Host Link)</div>
-            <div class="card-value mono">15.28 ms</div>
+            <div class="card-value mono">6.49 ms</div>
         </div>
         <div class="card">
             <div class="card-label">Max Frequency</div>
-            <div class="card-value mono">65.5 Hz</div>
+            <div class="card-value mono">154.0 Hz</div>
         </div>
         <div class="card">
             <div class="card-label">Deadline Misses</div>
-            <div class="card-value mono fail">100.0%</div>
+            <div class="card-value mono pass">0.0%</div>
         </div>
     </div>
 
@@ -133,42 +133,42 @@
         <tbody>
             <tr>
                 <td><strong>ESP32 Inference (Core 1)</strong></td>
-                <td class="mono">10.988 ± 0.009</td>
-                <td class="mono">10.995</td>
-                <td class="mono">11.027</td>
+                <td class="mono">2.309 ± 0.042</td>
+                <td class="mono">2.316</td>
+                <td class="mono">2.894</td>
                 <td>ms</td>
             </tr>
             <tr>
                 <td><strong>HIL Round-Trip Time</strong></td>
-                <td class="mono">15.28 ± 0.07</td>
-                <td class="mono">15.39</td>
-                <td class="mono">15.52</td>
+                <td class="mono">6.49 ± 0.09</td>
+                <td class="mono">6.67</td>
+                <td class="mono">7.33</td>
                 <td>ms</td>
             </tr>
             <tr>
                 <td><strong>UART &amp; Parse Overhead</strong></td>
-                <td class="mono">4.29</td>
+                <td class="mono">4.18</td>
                 <td>-</td>
                 <td>-</td>
                 <td>ms</td>
             </tr>
             <tr>
                 <td><strong>Core 1 Duty Cycle (@ 100 Hz)</strong></td>
-                <td class="mono">109.9%</td>
+                <td class="mono">23.1%</td>
                 <td>-</td>
                 <td>-</td>
                 <td>%</td>
             </tr>
             <tr>
                 <td><strong>Compute Efficiency (@ 240 MHz)</strong></td>
-                <td class="mono">39.5</td>
+                <td class="mono">8.3</td>
                 <td>-</td>
                 <td>-</td>
                 <td>cycles/MAC</td>
             </tr>
             <tr>
                 <td><strong>Deadline Misses (>10 ms)</strong></td>
-                <td class="mono">200 / 200 (100.0%)</td>
+                <td class="mono">0 / 200 (0.0%)</td>
                 <td>-</td>
                 <td>-</td>
                 <td>pkts</td>
@@ -191,9 +191,9 @@
         <tbody>
             <tr><td><strong>Multiply-Accumulate Ops</strong></td><td class="mono">66,816</td><td>MACs/step</td></tr>
             <tr><td><strong>Quantized Weights (FP32 -> INT8)</strong></td><td class="mono">261.0 -> 65.25 (-75.0%)</td><td>KB</td></tr>
-            <tr><td><strong>Weight Sparsity (Zero-Weights)</strong></td><td class="mono">25.9%</td><td>%</td></tr>
-            <tr><td><strong>Quantization Error (MAE)</strong></td><td class="mono">0.0016</td><td>N (Action)</td></tr>
-            <tr><td><strong>Quantization Error (Max Error)</strong></td><td class="mono">0.0065</td><td>N (Action)</td></tr>
+            <tr><td><strong>Weight Sparsity (Zero-Weights)</strong></td><td class="mono">3.9%</td><td>%</td></tr>
+            <tr><td><strong>Quantization Error (MAE)</strong></td><td class="mono">0.0017</td><td>N (Action)</td></tr>
+            <tr><td><strong>Quantization Error (Max Error)</strong></td><td class="mono">0.0063</td><td>N (Action)</td></tr>
             <tr><td><strong>Avg UART Frame Size (TX+RX)</strong></td><td class="mono">12.0</td><td>Bytes/step</td></tr>
         </tbody>
     </table>
@@ -205,10 +205,10 @@
         </thead>
         <tbody>
             <tr><td><strong>Active App Partition</strong></td><td class="mono">1024.0 KB</td><td>Configured OTA/App partition</td></tr>
-            <tr><td><strong>Internal SRAM Used</strong></td><td class="mono">42.1 KB</td><td>Global buffers + static allocations</td></tr>
-            <tr><td><strong>Current / Min Free Heap</strong></td><td class="mono">353.2 KB / 266.1 KB</td><td>Lifetime minimum free memory</td></tr>
-            <tr><td><strong>Task Stack Reserve (Comms Core 0)</strong></td><td class="mono">28,672 Bytes</td><td>uxTaskGetStackHighWaterMark</td></tr>
-            <tr><td><strong>Task Stack Reserve (Infer Core 1)</strong></td><td class="mono">51,024 Bytes</td><td>uxTaskGetStackHighWaterMark</td></tr>
+            <tr><td><strong>Internal SRAM Used</strong></td><td class="mono">42.0 KB</td><td>Global buffers + static allocations</td></tr>
+            <tr><td><strong>Current / Min Free Heap</strong></td><td class="mono">289.2 KB / 202.2 KB</td><td>Lifetime minimum free memory</td></tr>
+            <tr><td><strong>Task Stack Reserve (Comms Core 0)</strong></td><td class="mono">28,688 Bytes</td><td>uxTaskGetStackHighWaterMark</td></tr>
+            <tr><td><strong>Task Stack Reserve (Infer Core 1)</strong></td><td class="mono">63,456 Bytes</td><td>uxTaskGetStackHighWaterMark</td></tr>
             <tr><td><strong>CPU Frequency / Optimization</strong></td><td class="mono">240 MHz / Enabled (-O1/-O2/-O3)</td><td>Hardware compiler status</td></tr>
         </tbody>
     </table>

@@ -38,6 +38,10 @@ def to_c_array_int8(arr, name):
     vals = ", ".join([str(v) for v in arr])
     return f"const int8_t {name}[{len(arr)}] = {{{vals}}};\n"
 
+def to_c_array_int8_DRAM(arr, name):
+    vals = ", ".join([str(v) for v in arr])
+    return f"const int8_t DRAM_ATTR {name}[{len(arr)}] = {{{vals}}};\n"
+
 # Format bias arrays as C float arrays
 def to_c_array_float(arr, name):
     vals = ", ".join([f"{v:.6f}f" for v in arr])
@@ -47,6 +51,7 @@ def to_c_array_float(arr, name):
 cpp_code = f"""#pragma once
 #include <math.h>
 #include <stdint.h>
+#include "esp_attr.h"
 // PROGMEM removed for native ESP-IDF compatibility
 
 const float SCALE_W1 = {scale_w1:.8f}f;
@@ -54,7 +59,7 @@ const float SCALE_W2 = {scale_w2:.8f}f;
 const float SCALE_W_MU = {scale_w_mu:.8f}f;
 
 {to_c_array_int8(q_w1, 'W1')}
-{to_c_array_int8(q_w2, 'W2')}
+{to_c_array_int8_DRAM(q_w2, 'W2')} // save W2 in DRAM
 {to_c_array_int8(q_w_mu, 'W_mu')}
 
 {to_c_array_float(b1, 'b1')}
@@ -66,13 +71,20 @@ inline float predict_action(const float obs[4]) {{
     float h1[256];
     const int8_t* w1_ptr = W1;
 
+    // Take scaling out of loop to reduce operations
+    float obs_scaled[4];
+    obs_scaled[0] = obs[0] * SCALE_W1;
+    obs_scaled[1] = obs[1] * SCALE_W1;
+    obs_scaled[2] = obs[2] * SCALE_W1;
+    obs_scaled[3] = obs[3] * SCALE_W1;
+
     // First hidden layer: Process inputs with pre-scaled int8 weights and ReLU activation
     for (int i = 0; i < 256; i++) {{
         float sum = b1[i];
-        sum += (*w1_ptr++) * SCALE_W1 * obs[0];
-        sum += (*w1_ptr++) * SCALE_W1 * obs[1];
-        sum += (*w1_ptr++) * SCALE_W1 * obs[2];
-        sum += (*w1_ptr++) * SCALE_W1 * obs[3];
+        sum += (*w1_ptr++) * obs_scaled[0];
+        sum += (*w1_ptr++) * obs_scaled[1];
+        sum += (*w1_ptr++) * obs_scaled[2];
+        sum += (*w1_ptr++) * obs_scaled[3];
         h1[i] = sum > 0.0f ? sum : 0.0f; 
     }}
 
