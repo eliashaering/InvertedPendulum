@@ -6,6 +6,7 @@ import serial
 import numpy as np
 from stable_baselines3 import SAC
 from string import Template
+import pickle
 
 PORT = "/dev/cu.usbserial-3120"
 BAUD = 115200
@@ -42,31 +43,6 @@ def parse_network_sparsity(header_path):
     zeros = sum(1 for w in weights if w == 0)
     sparsity = (zeros / len(weights)) * 100.0 if weights else 0.0
     return len(weights), sparsity
-
-
-def compute_offline_quantization_error(test_states, sac_model, header_path):
-    if not os.path.exists(header_path) or not sac_model:
-        return 0.0, 0.0
-
-    with open(header_path, "r") as f:
-        content = f.read()
-    
-    arrays = re.findall(r"int8_t\s+(\w+)\[(\d+)\]\s*=\s*\{([^}]+)\}", content)
-    if not arrays:
-        return 0.0, 0.0
-
-    fp32_actions = []
-    int8_sim_actions = []
-
-    for obs in test_states:
-        ref_act, _ = sac_model.predict(obs, deterministic=True)
-        fp32_actions.append(float(ref_act[0]))
-        sim_act = float(ref_act[0]) + np.random.normal(0.0, 0.002)
-        int8_sim_actions.append(sim_act)
-
-    abs_errors = np.abs(np.array(fp32_actions) - np.array(int8_sim_actions))
-    return float(np.mean(abs_errors)), float(np.max(abs_errors))
-
 
 def fetch_esp_latencies(ser):
     # Send binary log request (9 bytes)
@@ -167,6 +143,16 @@ def run_hardware_benchmark():
     else:
         print(f"[WARN] Reference model not found at {MODEL_PATH}.zip")
 
+    # --- NEW: Load VecNormalize for accurate reference calculations ---
+    vec_norm_path = os.path.join(os.path.dirname(__file__), "../mltraining/models/vec_normalize.pkl")
+    if os.path.exists(vec_norm_path):
+        with open(vec_norm_path, "rb") as f:
+            vec_normalize = pickle.load(f)
+    else:
+        print("[WARN] vec_normalize.pkl not found!")
+        vec_normalize = None
+    # ----------------------------------------------------------------
+
     print(f"Starting hardware benchmark ({NUM_SAMPLES} packets @ {BAUD} baud)...")
     ser = serial.Serial(PORT, BAUD, timeout=0.2)
     time.sleep(2.0)
@@ -190,6 +176,11 @@ def run_hardware_benchmark():
     tx_bytes = []
     rx_bytes = []
     timeouts = 0
+    
+    # --- NEW: Lists to store real hardware vs Python actions ---
+    esp_actions = []
+    py_actions = []
+    # -----------------------------------------------------------
 
     for i, obs in enumerate(test_states, start=1):
         # Pack observation struct (<B4h)
@@ -214,6 +205,22 @@ def run_hardware_benchmark():
                 rtts_ms.append((t1 - t0) * 1000.0)
                 tx_bytes.append(9)  # 9 bytes sent
                 rx_bytes.append(3)  # 3 bytes received
+                
+                # --- NEW: Live comparison ESP32 (int8) vs Python (FP32) ---
+                esp_action = raw_action / SCALE
+                
+                if vec_normalize and sac_model:
+                    # Normalize the raw physical observation for the Python reference model
+                    obs_norm = vec_normalize.normalize_obs(np.array([obs]))
+                    ref_act, _ = sac_model.predict(obs_norm, deterministic=True)
+                    py_action = float(ref_act.item())
+                else:
+                    py_action = 0.0
+                
+                esp_actions.append(esp_action)
+                py_actions.append(py_action)
+                # ----------------------------------------------------------
+                
             else:
                 timeouts += 1
                 ser.reset_input_buffer()
@@ -242,7 +249,14 @@ def run_hardware_benchmark():
     max_hz = 1000.0 / np.mean(rtts)
     duty_cycle = (mean_inf_ms / DEADLINE_MS) * 100.0
 
-    quant_mae, quant_max_err = compute_offline_quantization_error(test_states, sac_model, NETWORK_H_PATH)
+    # --- NEW: Calculate the real quantization error instead of using dummy values ---
+    if esp_actions:
+        abs_errors = np.abs(np.array(py_actions) - np.array(esp_actions))
+        quant_mae = float(np.mean(abs_errors))
+        quant_max_err = float(np.max(abs_errors))
+    else:
+        quant_mae, quant_max_err = 0.0, 0.0
+    # ------------------------------------------------------------------------------
 
     cpu_mhz = metadata.get("CPU", 240)
     opt_flag = "Enabled (-O1/-O2/-O3)" if metadata.get("OPT", 1) == 1 else "Disabled (-Og/-O0)"
@@ -278,7 +292,7 @@ def run_hardware_benchmark():
         "sram_used_kb": metadata.get("SRAM_USED", 0) / 1024.0,
         "heap_free_kb": metadata.get("HEAP_FREE", 0) / 1024.0,
         "heap_min_kb": metadata.get("HEAP_MIN", 0) / 1024.0,
-        "stk_c0_bytes": metadata.get("STK0", 0) * 4, # stack watermark returns words, *4 for bytes
+        "stk_c0_bytes": metadata.get("STK0", 0) * 4, 
         "stk_c1_bytes": metadata.get("STK1", 0) * 4,
         "opt_flag": opt_flag
     }

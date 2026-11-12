@@ -1,10 +1,20 @@
 import numpy as np
 from stable_baselines3 import SAC
 import os
+import pickle
 
 # Load trained reinforcement learning model and extract the actor policy network
 model = SAC.load("./models/mujoco_cartpole_sac")
 actor = model.policy.actor
+
+# Load VecNormalize to get the exact scaling applied during training
+with open("./models/vec_normalize.pkl", "rb") as f:
+    vec_normalize = pickle.load(f)
+
+obs_mean = vec_normalize.obs_rms.mean
+obs_var = vec_normalize.obs_rms.var
+obs_std = np.sqrt(obs_var + vec_normalize.epsilon) # std = sqrt(var + epsilon)
+clip_obs = vec_normalize.clip_obs
 
 # Flatten model weights and biases for C++ export
 w1 = actor.latent_pi[0].weight.detach().numpy().flatten()
@@ -52,7 +62,11 @@ cpp_code = f"""#pragma once
 #include <math.h>
 #include <stdint.h>
 #include "esp_attr.h"
-// PROGMEM removed for native ESP-IDF compatibility
+
+// --- VecNormalize Parameters ---
+{to_c_array_float(obs_mean, 'OBS_MEAN')}
+{to_c_array_float(obs_std, 'OBS_STD')}
+const float OBS_CLIP = {clip_obs:.1f}f;
 
 const float SCALE_W1 = {scale_w1:.8f}f;
 const float SCALE_W2 = {scale_w2:.8f}f;
@@ -67,9 +81,17 @@ const float SCALE_W_MU = {scale_w_mu:.8f}f;
 {to_c_array_float(b_mu, 'b_mu')}
 
 // Fast deterministic inference routine optimized for real-time ESP32 execution
-inline float predict_action(const float obs[4]) {{
+inline float predict_action(const float raw_obs[4]) {{
     float h1[256];
     const int8_t* w1_ptr = W1;
+
+    // Normalize Observations (Identical to SB3 VecNormalize)
+    float obs[4];
+    for(int i = 0; i < 4; i++) {{
+        obs[i] = (raw_obs[i] - OBS_MEAN[i]) / OBS_STD[i];
+        if (obs[i] > OBS_CLIP) obs[i] = OBS_CLIP;
+        if (obs[i] < -OBS_CLIP) obs[i] = -OBS_CLIP;
+    }}
 
     // Take scaling out of loop to reduce operations
     float obs_scaled[4];
