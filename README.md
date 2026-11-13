@@ -5,10 +5,11 @@ A Hardware-in-the-Loop (HIL) control system executing a quantized Soft Actor-Cri
 ## Key Features
 
 * **Deterministic Dual-Core Execution:** Strict task isolation using FreeRTOS core pinning to decouple serial I/O from neural network math.
-* **Custom Quantized Inference:** Standalone C++ inference engine (`int8_t` weights with pre-scaled pointer arithmetic and pruning)—zero external ML library overhead.
+* **Custom Quantized Inference with Native Normalization:** Standalone C++ inference engine (`int8_t` weights with pre-scaled pointer arithmetic and pruning)—zero external ML library overhead. Raw physical sensor data is normalized directly on the MCU using statically compiled `VecNormalize` parameters (Mean/Std).
+* **Robust RL Training Pipeline:** The SAC agent is trained using Squared Exponential (Gaussian RBF) reward shaping and true OS-level domain randomization, allowing the MCU to recover the pendulum from extreme, non-deterministic starting angles.
 * **Maximum Hardware Utilization:** Enforced 240 MHz CPU clock, 80 MHz flash read speed, and hardware compiler optimization (`-O3`) via custom `sdkconfig.defaults` to meet strict <10 ms control deadlines.
 * **Zero-Blocking RAM Logging:** Custom `esp_log_set_vprintf` hook routing logs to a 4 KB FreeRTOS Stream Buffer in SRAM, eliminating UART bottlenecks and heap fragmentation during control loops.
-* **Automated HIL Benchmarking:** Python-based profiling suite that extracts real-time telemetry and generates comprehensive, standalone HTML reports tracking latency, UART overhead, and quantization error.
+* **Automated HIL Benchmarking:** Python-based profiling suite that extracts real-time telemetry and generates comprehensive standalone HTML reports. It calculates the *true* hardware quantization MAE by evaluating the live ESP32 INT8 action against an uncompressed FP32 Python reference model on the fly.
 
 ---
 
@@ -29,5 +30,5 @@ A Hardware-in-the-Loop (HIL) control system executing a quantized Soft Actor-Cri
 
 The repository includes a custom Python benchmarking tool (`benchmark.py`) that executes a full Hardware-in-the-Loop test against the ESP32 and generates a dark-themed HTML report.
 
-[View interactive HTML Benchmark Report](https://eliashaering.github.io/InvertedPendulum/simulation/benchmark_report.html?v=3)
+[View interactive HTML Benchmark Report](https://eliashaering.github.io/InvertedPendulum/simulation/benchmark_report.html?v=4)
 
